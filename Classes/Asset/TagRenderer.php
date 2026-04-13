@@ -20,8 +20,8 @@ use Ssch\Typo3Encore\ValueObject\LinkTag;
 use Ssch\Typo3Encore\ValueObject\ScriptTag;
 use TYPO3\CMS\Core\Http\ApplicationType;
 use TYPO3\CMS\Core\Page\PageRenderer;
+use TYPO3\CMS\Core\TypoScript\FrontendTypoScript;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
 final class TagRenderer implements TagRendererInterface
 {
@@ -71,7 +71,7 @@ final class TagRenderer implements TagRendererInterface
         }
 
         // We do not want to replace null values in $attributes
-        $parameters = array_filter($parameters, static fn ($param) => $param !== null);
+        $parameters = array_filter($parameters, static fn ($param) => null !== $param);
 
         foreach ($files as $index => $file) {
             $this->addAdditionalAbsRefPrefixDirectories($file);
@@ -101,7 +101,7 @@ final class TagRenderer implements TagRendererInterface
 
             $attributes = array_values($attributes);
 
-            $pageRendererMethodName = 'addJS' . ($scriptTag->getPosition() === self::POSITION_FOOTER ? 'Footer' : '');
+            $pageRendererMethodName = 'addJS' . (self::POSITION_FOOTER === $scriptTag->getPosition() ? 'Footer' : '');
 
             if ($scriptTag->isLibrary()) {
                 $pageRendererMethodName .= 'Library';
@@ -112,7 +112,7 @@ final class TagRenderer implements TagRendererInterface
                 $pageRenderer->{$pageRendererMethodName}(...$attributes);
             }
 
-            if ($scriptTag->isRegisterFile() === true) {
+            if (true === $scriptTag->isRegisterFile()) {
                 $this->assetRegistry->registerFile(new File($file, FileType::createScript(), [
                     'integrity' => $integrityHashes[$file] ?? false,
                 ]));
@@ -174,7 +174,7 @@ final class TagRenderer implements TagRendererInterface
 
             $pageRenderer->addCssFile(...$attributes);
 
-            if ($linkTag->isRegisterFile() === true) {
+            if (true === $linkTag->isRegisterFile()) {
                 $this->assetRegistry->registerFile(new File($file, FileType::createStyle()));
             }
         }
@@ -198,7 +198,7 @@ final class TagRenderer implements TagRendererInterface
 
             $newDir = basename(dirname($file)) . '/';
 
-            if (in_array($newDir, $directories, true) === false) {
+            if (false === in_array($newDir, $directories, true)) {
                 $GLOBALS['TYPO3_CONF_VARS']['FE']['additionalAbsRefPrefixDirectories'] .= ',' . $newDir;
             }
         }
@@ -210,7 +210,7 @@ final class TagRenderer implements TagRendererInterface
             return true;
         }
 
-        if ($this->applicationType === null) {
+        if (null === $this->applicationType) {
             return false;
         }
 
@@ -218,24 +218,31 @@ final class TagRenderer implements TagRendererInterface
             return false;
         }
 
-        if ($this->getTypoScriptFrontendController()->absRefPrefix === '') {
+        $typoScriptConfigArray = $this->getFrontendTypoScript()?->getConfigArray();
+        $absRefPrefix = trim($typoScriptConfigArray['absRefPrefix'] ?? '');
+
+        if ('' === $absRefPrefix) {
             return false;
         }
 
-        if ($this->getTypoScriptFrontendController()->absRefPrefix === '/') {
+        if ('/' === $absRefPrefix) {
             return true;
         }
 
-        if (str_starts_with($file, $this->getTypoScriptFrontendController()->absRefPrefix)) {
+        if (str_starts_with($file, $absRefPrefix)) {
             return false;
         }
 
         return ! GeneralUtility::isValidUrl($file);
     }
 
-    private function getTypoScriptFrontendController(): TypoScriptFrontendController
+    private function getFrontendTypoScript(): ?FrontendTypoScript
     {
-        return $GLOBALS['TSFE'];
+        $request = $GLOBALS['TYPO3_REQUEST'] ?? null;
+        if (! $request instanceof ServerRequestInterface) {
+            return null;
+        }
+        return $request->getAttribute('frontend.typoscript');
     }
 
     private function removeType(array $parameters): bool
@@ -244,7 +251,7 @@ final class TagRenderer implements TagRendererInterface
             return false;
         }
 
-        if ($this->applicationType === null) {
+        if (null === $this->applicationType) {
             return false;
         }
 
@@ -252,7 +259,8 @@ final class TagRenderer implements TagRendererInterface
             return false;
         }
 
-        if (! isset($this->getTypoScriptFrontendController()->config['config']['doctype']) || $this->getTypoScriptFrontendController()->config['config']['doctype'] !== 'html5') {
+        $typoScriptConfigArray = $this->getFrontendTypoScript()?->getConfigArray();
+        if (! isset($typoScriptConfigArray['doctype']) || 'html5' !== $typoScriptConfigArray['doctype']) {
             return false;
         }
 

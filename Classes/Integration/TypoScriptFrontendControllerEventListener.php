@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Ssch\Typo3Encore\Integration;
 
+use TYPO3\CMS\Core\TypoScript\FrontendTypoScript;
 use TYPO3\CMS\Frontend\Event\AfterCacheableContentIsGeneratedEvent;
 
 final class TypoScriptFrontendControllerEventListener
@@ -24,15 +25,22 @@ final class TypoScriptFrontendControllerEventListener
     public function __invoke(AfterCacheableContentIsGeneratedEvent $event): void
     {
         $registeredFiles = $this->assetRegistry->getRegisteredFiles();
-        if ($registeredFiles === []) {
+        if ([] === $registeredFiles) {
             return;
         }
 
-        $event->getController()
-            ->config['encore_asset_registry'] = [
-                'registered_files' => $this->assetRegistry->getRegisteredFiles(),
-                'default_attributes' => $this->assetRegistry->getDefaultAttributes(),
-                'settings' => $this->settingsService->getSettings(),
-            ];
+        $request = $event->getRequest();
+        $typoScript = $request->getAttribute('frontend.typoscript');
+        if (! $typoScript instanceof FrontendTypoScript) {
+            return;
+        }
+
+        $configArray = $typoScript->getConfigArray();
+        $configArray['encore_asset_registry'] = [
+            'registered_files' => $this->assetRegistry->getRegisteredFiles(),
+            'default_attributes' => $this->assetRegistry->getDefaultAttributes(),
+            'settings' => $this->settingsService->getSettings(),
+        ];
+        $typoScript->setConfigArray($configArray);
     }
 }
